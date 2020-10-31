@@ -1,12 +1,9 @@
 import inspect
 import random
 from copy import deepcopy
-
 from sklearn.metrics import accuracy_score
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
-
-from easynas import constants
 import functools
 import numpy as np
 import pytorch_lightning as pl
@@ -76,65 +73,65 @@ def calculate_activation_sizes(layer_collection, input_shape):
     return activation_sizes
 
 
-def init_conv_layer(input_shape):
-    kernel_limits = [1] * constants.MAX_N_KERNELS
+def init_conv_layer(input_shape, max_n_kernels, max_conv_kernel_size, max_conv_stride, max_conv_dilation,
+                    max_conv_out_channels):
+    kernel_limits = [1] * max_n_kernels
     for sh_idx in range(len(input_shape[1:])):
         kernel_limits[sh_idx] = np.inf
     return partialclass(nn.Conv2d,
-        out_channels=(random.randint(1, constants.MAX_CONV_OUT_CHANNELS)),
-        kernel_size=(min(random.randint(1, constants.MAX_CONV_KERNEL_SIZE[0]), kernel_limits[0]),
-                     min(random.randint(1, constants.MAX_CONV_KERNEL_SIZE[1]), kernel_limits[1])),
-        stride=(min(random.randint(1, constants.MAX_CONV_STRIDE[0]), kernel_limits[0]),
-                min(random.randint(1, constants.MAX_CONV_STRIDE[1]), kernel_limits[1])),
-        dilation=(min(random.randint(1, constants.MAX_CONV_DILATION[0]), kernel_limits[0]),
-                min(random.randint(1, constants.MAX_CONV_DILATION[1]), kernel_limits[1]))
+        out_channels=(random.randint(1, max_conv_out_channels)),
+        kernel_size=(min(random.randint(1, max_conv_kernel_size[0]), kernel_limits[0]),
+                     min(random.randint(1, max_conv_kernel_size[1]), kernel_limits[1])),
+        stride=(min(random.randint(1, max_conv_stride[0]), kernel_limits[0]),
+                min(random.randint(1, max_conv_stride[1]), kernel_limits[1])),
+        dilation=(min(random.randint(1, max_conv_dilation[0]), kernel_limits[0]),
+                min(random.randint(1, max_conv_dilation[1]), kernel_limits[1]))
     )
 
 
-def init_maxpool_layer(input_shape):
-    kernel_limits = [1] * constants.MAX_N_KERNELS
+def init_maxpool_layer(input_shape, max_n_kernels, max_pooling_kernel_size, max_pooling_stride):
+    kernel_limits = [1] * max_n_kernels
     for sh_idx in range(len(input_shape[1:])):
         kernel_limits[sh_idx] = np.inf
     return nn.MaxPool2d(
-        kernel_size=(min(random.randint(1, constants.MAX_POOLING_KERNEL_SIZE[0]), kernel_limits[0]),
-                     min(random.randint(1, constants.MAX_POOLING_KERNEL_SIZE[1]), kernel_limits[1])),
-        stride=(min(random.randint(1, constants.MAX_POOLING_STRIDE[0]), kernel_limits[0]),
-                min(random.randint(1, constants.MAX_POOLING_STRIDE[1]), kernel_limits[1]))
+        kernel_size=(min(random.randint(1, max_pooling_kernel_size[0]), kernel_limits[0]),
+                     min(random.randint(1, max_pooling_kernel_size[1]), kernel_limits[1])),
+        stride=(min(random.randint(1, max_pooling_stride[0]), kernel_limits[0]),
+                min(random.randint(1, max_pooling_stride[1]), kernel_limits[1]))
     )
 
 
-def random_initialize_layer(layer, input_shape):
+def random_initialize_layer(layer, input_shape, max_n_kernels, max_conv_kernel_size, max_conv_stride, max_conv_dilation,
+                                                        max_conv_out_channels, max_pooling_kernel_size,
+                                                        max_pooling_stride):
     init_functions = {
-        nn.Conv2d: init_conv_layer,
+        nn.Conv2d: functools.partial(init_conv_layer, max_n_kernels=max_n_kernels,
+                                     max_conv_kernel_size=max_conv_kernel_size, max_conv_stride=max_conv_stride,
+                                     max_conv_dilation=max_conv_dilation, max_conv_out_channels=max_conv_out_channels),
         nn.Dropout: lambda _: nn.Dropout(),
-        nn.MaxPool2d: init_maxpool_layer,
+        nn.MaxPool2d: functools.partial(init_maxpool_layer, max_n_kernels=max_n_kernels,
+                                        max_pooling_kernel_size=max_pooling_kernel_size,
+                                        max_pooling_stride=max_pooling_stride),
         nn.Identity: lambda _: nn.Identity(),
         nn.ReLU: lambda _: nn.ReLU()
     }
     return init_functions[layer](input_shape)
 
 
-def generate_random_model(n_layers, input_shape, available_modules=constants.AVAILABLE_MODULES):
+def generate_random_model(n_layers, input_shape, available_modules, max_n_kernels, max_conv_kernel_size, max_conv_stride,
+                          max_conv_dilation, max_conv_out_channels, max_pooling_kernel_size, max_pooling_stride):
     layer_collection = []
     for i in range(n_layers):
-        layer_collection.append(random_initialize_layer(random.choice(available_modules), input_shape))
+        layer_collection.append(random_initialize_layer(random.choice(available_modules), input_shape, max_n_kernels,
+                                                        max_conv_kernel_size, max_conv_stride, max_conv_dilation,
+                                                        max_conv_out_channels, max_pooling_kernel_size,
+                                                        max_pooling_stride))
     if calculate_activation_sizes(layer_collection, input_shape) != -1:
         return layer_collection
     else:
-        return generate_random_model(n_layers, input_shape)
-
-
-def fix_layer_list_by_input_dims(layer_list, input_dims):
-    new_layer_list = []
-    for layer in layer_list:
-        layer = deepcopy(layer)
-        if isinstance(layer, nn.Conv2d) or isinstance(layer, nn.MaxPool2d):
-            layer.kernel_size = tuple(list(layer.kernel_size[:input_dims]) + [1] * (len(layer.kernel_size) - input_dims))
-            layer.stride = tuple(list(layer.stride[:input_dims]) + [1] * (len(layer.stride) - input_dims))
-        if isinstance(layer, nn.Conv2d):
-            layer.dilation = tuple(list(layer.dilation[:input_dims]) + [1] * (len(layer.dilation) - input_dims))
-        new_layer_list.append(layer)
-    return new_layer_list
+        return generate_random_model(n_layers, input_shape, available_modules, max_n_kernels, max_conv_kernel_size,
+                                     max_conv_stride, max_conv_dilation, max_conv_out_channels, max_pooling_kernel_size,
+                                     max_pooling_stride)
 
 
 def generate_sequential(layer_list, input_shape, output_size):
@@ -147,19 +144,23 @@ def generate_sequential(layer_list, input_shape, output_size):
             n_channels = new_layer_list[-1].out_channels
         else:
             new_layer_list.append(layer)
-    # new_layer_list = fix_layer_list_by_input_dims(new_layer_list, len(input_shape) - 1)
     pre_flatten_size = np.prod([x for x in activation_sizes[-1] if x < np.inf])
     new_layer_list.extend([nn.Flatten(), nn.Linear(pre_flatten_size, output_size)])
     return nn.Sequential(*new_layer_list)
 
 
-def get_model_score(model, X_train, y_train, X_val, y_val):
+def get_model_score(model, X_train, y_train, X_val, y_val, batch_size):
     litmodel = LitModel(model, F.cross_entropy)
     trainer = pl.Trainer(callbacks=[ValAccCallback()], max_epochs=5)
     train_dataset = TensorDataset(torch.Tensor(X_train), torch.Tensor(y_train))
     val_dataset = TensorDataset(torch.Tensor(X_val), torch.Tensor(y_val))
-    trainer.fit(litmodel, DataLoader(train_dataset), DataLoader(val_dataset))
-    y_pred = torch.max(litmodel(torch.Tensor(X_val)), 1)[1]
-    return accuracy_score(y_val, y_pred)
+    valloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    trainer.fit(litmodel, DataLoader(train_dataset, batch_size=batch_size), valloader)
+    all_preds = []
+    for x, _ in valloader:
+        y_pred = litmodel(x)
+        all_preds.append(y_pred.detach().numpy())
+    predictions = np.argmax(np.vstack(all_preds), axis=1)
+    return accuracy_score(y_val, predictions)
 
 
