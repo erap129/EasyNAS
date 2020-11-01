@@ -38,9 +38,9 @@ class ModelGenerationTests(unittest.TestCase):
     def test_crossover(self):
         X, y = make_classification(100)
         X = X[:, None, :, None]
-        en = EasyNASGA(X, y)
-        en.ga.create_first_generation()
-        child_1, child_2 = en.crossover(en.ga.current_generation[0].genes, en.ga.current_generation[1].genes)
+        ea = EasyNASGA(X, y, population_size=2, generations=1)
+        ea.ga.create_first_generation()
+        child_1, child_2 = ea.crossover(ea.ga.current_generation[0].genes, ea.ga.current_generation[1].genes)
         self.assertEqual(len(child_1), 10)
         self.assertEqual(len(child_2), 10)
         # TODO - check validity of each of the possible crossover outcomes
@@ -48,11 +48,11 @@ class ModelGenerationTests(unittest.TestCase):
     def test_mutation(self):
         X, y = make_classification(100)
         X = X[:, None, :, None]
-        en = EasyNASGA(X, y)
-        en.ga.create_first_generation()
-        orig_individual = deepcopy(en.ga.current_generation[0].genes)
-        en.mutate(en.ga.current_generation[0].genes)
-        self.assertNotEqual(orig_individual, en.ga.current_generation[0].genes)
+        ea = EasyNASGA(X, y, population_size=2, generations=1)
+        ea.ga.create_first_generation()
+        orig_individual = deepcopy(ea.ga.current_generation[0].genes)
+        ea.mutate(ea.ga.current_generation[0].genes)
+        self.assertNotEqual(orig_individual, ea.ga.current_generation[0].genes)
 
     def test_sequential_generation(self):
         input_shape = [3, 100, 100]
@@ -77,7 +77,7 @@ class ModelGenerationTests(unittest.TestCase):
     def test_run_easynas(self):
         X, y = make_classification(100)
         X = X[:, None, :, None]
-        ea = EasyNASGA(X, y)
+        ea = EasyNASGA(X, y, population_size=5, generations=1)
         ea.ga.run()
         print(ea.ga.best_individual())
 

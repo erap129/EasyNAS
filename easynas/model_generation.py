@@ -149,9 +149,10 @@ def generate_sequential(layer_list, input_shape, output_size):
     return nn.Sequential(*new_layer_list)
 
 
-def get_model_score(model, X_train, y_train, X_val, y_val, batch_size):
+def get_model_score(model, X_train, y_train, X_val, y_val, batch_size, max_epochs, progress_bar=False):
     litmodel = LitModel(model, F.cross_entropy)
-    trainer = pl.Trainer(callbacks=[ValAccCallback()], max_epochs=5)
+    trainer = pl.Trainer(callbacks=[ValAccCallback()], max_epochs=max_epochs, gpus=1,
+                         progress_bar_refresh_rate=int(progress_bar), weights_summary=None)
     train_dataset = TensorDataset(torch.Tensor(X_train), torch.Tensor(y_train))
     val_dataset = TensorDataset(torch.Tensor(X_val), torch.Tensor(y_val))
     valloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
