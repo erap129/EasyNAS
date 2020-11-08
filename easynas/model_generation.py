@@ -1,6 +1,5 @@
 import inspect
 import random
-from copy import deepcopy
 from sklearn.metrics import accuracy_score
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
@@ -9,12 +8,9 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
-from pytorch_lightning.callbacks import Callback
-
-
-class ValAccCallback(Callback):
-    def on_train_end(self, trainer, pl_module):
-        print('do something when training ends')
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+import logging
+logging.getLogger("lightning").setLevel(logging.ERROR)
 
 
 class LitModel(pl.LightningModule):
@@ -34,8 +30,12 @@ class LitModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss = self.get_loss(batch)
-        logs = {'train_loss': loss}
-        return {'loss': loss, 'log': logs}
+        self.log('loss', loss)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss = self.get_loss(batch)
+        self.log('val_loss', loss)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-3)
@@ -151,7 +151,7 @@ def generate_sequential(layer_list, input_shape, output_size):
 
 def get_model_score(model, X_train, y_train, X_val, y_val, batch_size, max_epochs, progress_bar=False):
     litmodel = LitModel(model, F.cross_entropy)
-    trainer = pl.Trainer(callbacks=[ValAccCallback()], max_epochs=max_epochs, gpus=1,
+    trainer = pl.Trainer(callbacks=[EarlyStopping(monitor='val_loss')], max_epochs=max_epochs, gpus=1,
                          progress_bar_refresh_rate=int(progress_bar), weights_summary=None)
     train_dataset = TensorDataset(torch.Tensor(X_train), torch.Tensor(y_train))
     val_dataset = TensorDataset(torch.Tensor(X_val), torch.Tensor(y_val))

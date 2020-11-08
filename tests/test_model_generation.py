@@ -72,12 +72,12 @@ class ModelGenerationTests(unittest.TestCase):
         X, y = make_classification(100)
         X = X[:, None, :, None]
         sequential = generate_sequential(layer_list, input_shape=input_shape, output_size=10)
-        print(get_model_score(sequential, X[:50], y[:50], X[50:], y[50:], 32))
+        print(get_model_score(sequential, X[:50], y[:50], X[50:], y[50:], 32, 1))
 
     def test_run_easynas(self):
         X, y = make_classification(100)
         X = X[:, None, :, None]
-        ea = EasyNASGA(X, y, population_size=5, generations=1)
+        ea = EasyNASGA(X, y, population_size=5, generations=3)
         ea.ga.run()
         print(ea.ga.best_individual())
 
