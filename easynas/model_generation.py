@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import logging
 logging.getLogger("lightning").setLevel(logging.ERROR)
+log = logging.getLogger(__name__)
 
 
 class LitModel(pl.LightningModule):
@@ -25,6 +26,10 @@ class LitModel(pl.LightningModule):
     def get_loss(self, batch):
         x, y = batch
         y_hat = self.model(x)
+        # try:
+        #     loss = self.loss_function(y_hat, y.long())
+        # except RuntimeError:
+        #     print
         loss = self.loss_function(y_hat, y.long())
         return loss
 
@@ -45,6 +50,7 @@ class LitModel(pl.LightningModule):
 def partialclass(cls, *args, **kwds):
     class NewCls(cls):
         __init__ = functools.partialmethod(cls.__init__, *args, **kwds)
+    NewCls.__name__ = f'{cls.__name__}_partial'
     return NewCls
 
 
@@ -73,20 +79,21 @@ def calculate_activation_sizes(layer_collection, input_shape):
     return activation_sizes
 
 
-def init_conv_layer(input_shape, max_n_kernels, max_conv_kernel_size, max_conv_stride, max_conv_dilation,
-                    max_conv_out_channels):
-    kernel_limits = [1] * max_n_kernels
+def init_conv_layer(input_shape, n_kernels, conv_kernel_size, conv_stride, conv_dilation, conv_out_channels,
+                    random_sizes=True):
+    kernel_limits = [1] * n_kernels
     for sh_idx in range(len(input_shape[1:])):
         kernel_limits[sh_idx] = np.inf
-    return partialclass(nn.Conv2d,
-        out_channels=(random.randint(1, max_conv_out_channels)),
-        kernel_size=(min(random.randint(1, max_conv_kernel_size[0]), kernel_limits[0]),
-                     min(random.randint(1, max_conv_kernel_size[1]), kernel_limits[1])),
-        stride=(min(random.randint(1, max_conv_stride[0]), kernel_limits[0]),
-                min(random.randint(1, max_conv_stride[1]), kernel_limits[1])),
-        dilation=(min(random.randint(1, max_conv_dilation[0]), kernel_limits[0]),
-                min(random.randint(1, max_conv_dilation[1]), kernel_limits[1]))
-    )
+    if random_sizes:
+        conv_out_channels = random.randint(1, conv_out_channels)
+        conv_kernel_size = (min(random.randint(1, conv_kernel_size[0]), kernel_limits[0]),
+                      min(random.randint(1, conv_kernel_size[1]), kernel_limits[1]))
+        conv_stride = (min(random.randint(1, conv_stride[0]), kernel_limits[0]),
+                min(random.randint(1, conv_stride[1]), kernel_limits[1]))
+        conv_dilation = (min(random.randint(1, conv_dilation[0]), kernel_limits[0]),
+                min(random.randint(1, conv_dilation[1]), kernel_limits[1]))
+    return partialclass(nn.Conv2d, out_channels=random.randint(1, conv_out_channels), kernel_size=conv_kernel_size,
+                        stride=conv_stride, dilation=conv_dilation)
 
 
 def init_maxpool_layer(input_shape, max_n_kernels, max_pooling_kernel_size, max_pooling_stride):
@@ -105,9 +112,9 @@ def random_initialize_layer(layer, input_shape, max_n_kernels, max_conv_kernel_s
                                                         max_conv_out_channels, max_pooling_kernel_size,
                                                         max_pooling_stride):
     init_functions = {
-        nn.Conv2d: functools.partial(init_conv_layer, max_n_kernels=max_n_kernels,
-                                     max_conv_kernel_size=max_conv_kernel_size, max_conv_stride=max_conv_stride,
-                                     max_conv_dilation=max_conv_dilation, max_conv_out_channels=max_conv_out_channels),
+        nn.Conv2d: functools.partial(init_conv_layer, n_kernels=max_n_kernels,
+                                     conv_kernel_size=max_conv_kernel_size, conv_stride=max_conv_stride,
+                                     conv_dilation=max_conv_dilation, conv_out_channels=max_conv_out_channels),
         nn.Dropout: lambda _: nn.Dropout(),
         nn.MaxPool2d: functools.partial(init_maxpool_layer, max_n_kernels=max_n_kernels,
                                         max_pooling_kernel_size=max_pooling_kernel_size,
@@ -134,7 +141,7 @@ def generate_random_model(n_layers, input_shape, available_modules, max_n_kernel
                                      max_pooling_stride)
 
 
-def generate_sequential(layer_list, input_shape, output_size):
+def generate_sequential(layer_list, input_shape, output_size, append_flatten=True):
     activation_sizes = calculate_activation_sizes(layer_list, input_shape)
     n_channels = input_shape[0]
     new_layer_list = []
@@ -145,8 +152,33 @@ def generate_sequential(layer_list, input_shape, output_size):
         else:
             new_layer_list.append(layer)
     pre_flatten_size = np.prod([x for x in activation_sizes[-1] if x < np.inf])
-    new_layer_list.extend([nn.Flatten(), nn.Linear(pre_flatten_size, output_size)])
+    if append_flatten:
+        new_layer_list.extend([nn.Flatten(), nn.Linear(pre_flatten_size, output_size)])
     return nn.Sequential(*new_layer_list)
+
+
+def sequential_to_layer_list(sequential):
+    layer_list = []
+    for layer in sequential:
+        if isinstance(layer, nn.Conv2d):
+            layer_list.append(partialclass(nn.Conv2d, out_channels=layer.out_channels, kernel_size=layer.kernel_size,
+                                           stride=layer.stride, dilation=layer.dilation))
+        else:
+            layer_list.append(layer)
+    return layer_list
+
+
+def load_state(sequential, state_dict_1, state_dict_2, cutoff_index):
+    own_state = sequential.state_dict()
+    for copy_state_dict in [{k: v for k, v in state_dict_1.items() if int(k.split('.')[0]) < cutoff_index},
+                            {k: v for k, v in state_dict_2.items() if int(k.split('.')[0]) >= cutoff_index}]:
+        for name, param in copy_state_dict.items():
+            if isinstance(param, nn.Parameter):
+                param = param.data
+            try:
+                own_state[name].copy_(param)
+            except (RuntimeError, KeyError) as re:
+                print(f'failed weight inheritance for layer {name} with exception {str(re)}')
 
 
 def get_model_score(model, X_train, y_train, X_val, y_val, batch_size, max_epochs, progress_bar=False):
@@ -163,5 +195,3 @@ def get_model_score(model, X_train, y_train, X_val, y_val, batch_size, max_epoch
         all_preds.append(y_pred.detach().numpy())
     predictions = np.argmax(np.vstack(all_preds), axis=1)
     return accuracy_score(y_val, predictions)
-
-
