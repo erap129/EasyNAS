@@ -19,4 +19,9 @@ print(f'best individual: {best_individual}')
 
 ## Credits
 Anyone using this package for research/production purposes is requested to cite the following research article:
-Rapaport, Elad, Oren Shriki, and Rami Puzis. "EEGNAS: Neural Architecture Search for Electroencephalography Data Analysis and Decoding." International Workshop on Human Brain and Artificial Intelligence. Springer, Singapore, 2019.
+```markdown
+Rapaport, Elad, Oren Shriki, and Rami Puzis.
+"EEGNAS: Neural Architecture Search for Electroencephalography Data
+Analysis and Decoding." International Workshop on Human Brain and
+Artificial Intelligence. Springer, Singapore, 2019.
+```
