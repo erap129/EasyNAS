@@ -178,7 +178,7 @@ def load_state(sequential, state_dict_1, state_dict_2, cutoff_index):
             try:
                 own_state[name].copy_(param)
             except (RuntimeError, KeyError) as re:
-                print(f'failed weight inheritance for layer {name} with exception {str(re)}')
+                log.info(f'failed weight inheritance for layer {name} with exception {str(re)}')
 
 
 def get_model_score(model, X_train, y_train, X_val, y_val, batch_size, max_epochs, progress_bar=False):

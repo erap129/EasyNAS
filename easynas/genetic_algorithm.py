@@ -3,7 +3,7 @@ from pyeasyga import pyeasyga
 import logging
 from sklearn.model_selection import train_test_split
 from torch import nn
-from tqdm import tqdm, trange
+from tqdm import tqdm
 import os
 import numpy as np
 
@@ -35,7 +35,7 @@ class NASGeneticAlgorithm(pyeasyga.GeneticAlgorithm):
         for individual in tqdm(self.current_generation):
             individual.fitness = self.fitness_function(
                 individual.genes, self.seed_data)
-        print(f'Current best validation accuracy: {max([x.fitness for x in self.current_generation])}')
+        log.info(f'Current best validation accuracy: {max([x.fitness for x in self.current_generation])}')
 
 
 class EasyNASGA:
@@ -155,4 +155,5 @@ class EasyNASGA:
     def get_best_individual(self):
         if len(self.ga.current_generation) == 0:
             raise Exception('Cannot return best individual before running the GA')
-        return generate_sequential(self.ga.best_individual()[1], self.X_train.shape[1:], len(np.unique(self.y_train)))
+        return generate_sequential(self.ga.best_individual()[1], self.X_train.shape[1:], len(np.unique(self.y_train)),
+                                   append_flatten=False)

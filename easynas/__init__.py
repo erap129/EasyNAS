@@ -1,0 +1,1 @@
+from easynas.genetic_algorithm import EasyNASGA
