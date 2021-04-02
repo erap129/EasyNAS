@@ -38,8 +38,7 @@ print(f'best individual: {best_individual}')
 ## Credits
 Anyone using this package for research/production purposes is requested to cite the following research article:
 ```markdown
-Rapaport, Elad, Oren Shriki, and Rami Puzis.
-"EEGNAS: Neural Architecture Search for Electroencephalography Data
-Analysis and Decoding." International Workshop on Human Brain and
-Artificial Intelligence. Springer, Singapore, 2019.
+Rapaport, E., Poese, I., Zilberman, P., Holschke, O., & Puzis, R. (2020).
+Predicting traffic overflows on private peering.
+arXiv preprint arXiv:2010.01380.
 ```
